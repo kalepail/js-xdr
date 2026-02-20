@@ -5,6 +5,9 @@ project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+### Added
+* Added optional `maxDepth` decoding limits for nested recursive types to guard against stack overflows during decode. `Array`, `VarArray`, and `Option` constructors now accept a depth limit, and `Struct.create` / `Union.create` can configure per-type decode depth budgets.
+
 ### Fixed
 * Removed [the custom `Buffer.subarray` polyfill](https://github.com/stellar/js-xdr/pull/118) introduced in v3.1.1 to address the issue of it not being usable in the React Native Hermes engine. We recommend using [`@exodus/patch-broken-hermes-typed-arrays`](https://github.com/ExodusMovement/patch-broken-hermes-typed-arrays) as an alternative. If needed, please review and consider manually adding it to your project ([#128](https://github.com/stellar/js-xdr/pull/128)).
 
