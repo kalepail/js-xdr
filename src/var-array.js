@@ -24,6 +24,14 @@ export class VarArray extends NestedXdrType {
         `saw ${length} length VarArray, max allowed is ${this._maxLength}`
       );
 
+    // Upper-bound fast-fail: remaining bytes is a loose capacity check since
+    // each XDR element typically consumes more than 1 byte (e.g., 4+ bytes)
+    if (length > reader.remainingBytes()) {
+      throw new XdrReaderError(
+        `VarArray length ${length} exceeds remaining ${reader.remainingBytes()} bytes`
+      );
+    }
+
     const result = new Array(length);
     for (let i = 0; i < length; i++) {
       result[i] = this._childType.read(reader, remainingDepth - 1);

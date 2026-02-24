@@ -4,6 +4,28 @@ import { XdrWriter } from '../../src/serialization/xdr-writer';
 const subject = new XDR.VarArray(XDR.Int, 2);
 
 describe('VarArray#read', function () {
+  function createFixedSizeChild() {
+    let calls = 0;
+
+    return {
+      FixedSizeChild: class FixedSizeChild {
+        static read(io) {
+          calls += 1;
+          return io.readInt32BE();
+        }
+
+        static write() {}
+
+        static isValid() {
+          return true;
+        }
+      },
+      getCalls() {
+        return calls;
+      }
+    };
+  }
+
   it('decodes correctly', function () {
     expect(read([0x00, 0x00, 0x00, 0x00])).to.eql([]);
 
@@ -24,6 +46,55 @@ describe('VarArray#read', function () {
 
   it('throws read error when the encoded array is too large', function () {
     expect(() => read([0x00, 0x00, 0x00, 0x03])).to.throw(/read error/i);
+  });
+
+  it('fast-fails when declared length cannot fit remaining bytes for fixed-size child', function () {
+    const { FixedSizeChild, getCalls } = createFixedSizeChild();
+
+    const arr = new XDR.VarArray(FixedSizeChild, 10);
+    const io = new XdrReader([0x00, 0x00, 0x00, 0x02]);
+    const remainingAfterLengthPrefix = io.remainingBytes() - 4;
+
+    expect(() => arr.read(io)).to.throw(
+      new RegExp(`exceeds remaining ${remainingAfterLengthPrefix} bytes`, 'i')
+    );
+    expect(getCalls()).to.eql(0);
+  });
+
+  it('decodes on exact-fit payload and reads each child once', function () {
+    const { FixedSizeChild, getCalls } = createFixedSizeChild();
+
+    const arr = new XDR.VarArray(FixedSizeChild, 10);
+    const io = new XdrReader([
+      0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x02
+    ]);
+
+    expect(arr.read(io)).to.eql([1, 2]);
+    expect(getCalls()).to.eql(2);
+  });
+
+  it('checks maxLength before insufficient-bytes fast-fail', function () {
+    const { FixedSizeChild, getCalls } = createFixedSizeChild();
+
+    const arr = new XDR.VarArray(FixedSizeChild, 1);
+    const io = new XdrReader([0x00, 0x00, 0x00, 0x02]);
+
+    expect(() => arr.read(io)).to.throw(/max allowed/i);
+    expect(getCalls()).to.eql(0);
+  });
+
+  it('consumes only the 4-byte length prefix on VarArray insufficient-bytes fast-fail', function () {
+    const { FixedSizeChild } = createFixedSizeChild();
+
+    const arr = new XDR.VarArray(FixedSizeChild, 10);
+    const io = new XdrReader([0x00, 0x00, 0x00, 0x02]);
+    const before = io.remainingBytes();
+    const remainingAfterLengthPrefix = io.remainingBytes() - 4;
+
+    expect(() => arr.read(io)).to.throw(
+      new RegExp(`exceeds remaining ${remainingAfterLengthPrefix} bytes`, 'i')
+    );
+    expect(before - io.remainingBytes()).to.eql(4);
   });
 
   function read(bytes) {
