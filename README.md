@@ -18,17 +18,19 @@ compound XDR types (enums, structs and unions)
 via npm:
 
 ```shell
-npm install --save js-xdr
+npm install --save @stellar/js-xdr
 ```
 
 ## Usage
 
-You can find some [examples here.](examples)
+You can find some [examples here](examples/).
 
 First, let's import the library:
 
 ```javascript
-var xdr = require('js-xdr');
+var xdr = require('@stellar/js-xdr');
+// or
+import xdr from '@stellar/js-xdr';
 ```
 
 Now, let's look at how to decode some primitive types:
@@ -48,18 +50,16 @@ xdr.Int.fromXDR([0xff, 0xff, 0xff, 0xff]); // returns -1
 xdr.UnsignedInt.fromXDR([0xff, 0xff, 0xff, 0xff]); // returns 4294967295
 
 // XDR Hypers, however, cannot be safely represented in the 53-bits
-// of precision we get with javascript numbers, and so we have a custom class
-// for those numbers.  Hyper and UnsignedHyper both use
-//https://www.npmjs.com/package/long to represent the 64-bit numbers
-
+// of precision we get with a JavaScript `Number`, so we allow creation from big-endian arrays of numbers, strings, or bigints.
 var result = xdr.Hyper.fromXDR([0, 0, 0, 0, 0, 0, 0, 0]); // returns an instance of xdr.Hyper
+result = new xdr.Hyper(0); // equivalent
 
 // convert the hyper to a string
 result.toString(); // return '0'
 
 // math!
-var ten = result.add(10);
-var minusone = result.subtract(1);
+var ten = result.toBigInt() + 10;
+var minusone = result.toBigInt() - 1;
 
 // construct a number from a string
 var big = xdr.Hyper.fromString('1099511627776');
@@ -80,64 +80,54 @@ There are a couple of caveats to be aware of with this library:
 
 ## Code generation
 
-js-xdr by itself does not have any ability to parse XDR IDL files and produce a
-parser for your custom data types. Instead, that is the responsibility of
-[xdrgen](http://github.com/stellar/xdrgen). xdrgen will take your .x files and
-produce a javascript file that target this library to allow for your own custom
-types.
+`js-xdr` by itself does not have any ability to parse XDR IDL files and produce
+a parser for your custom data types. Instead, that is the responsibility of
+[`xdrgen`](http://github.com/stellar/xdrgen). xdrgen will take your .x files
+and produce a javascript file that target this library to allow for your own
+custom types.
 
-See [js-stellar-base](http://github.com/stellar/js-stellar-base) for an example
+See [`stellar-base`](http://github.com/stellar/js-stellar-base) for an example
 (check out the src/generated directory)
 
 ## Contributing
 
 Please [see CONTRIBUTING.md for details](CONTRIBUTING.md).
 
-### To develop and test js-xdr itself
+## Development Setup
 
-1. Clone the repo
+**Requirements:**
+- Node.js ≥ 20.0.0
+- pnpm ≥ 9.0
+- Git
 
-```shell
-git clone https://github.com/stellar/js-xdr.git
-```
+**Setup Steps:**
 
-2. Install dependencies inside js-xdr folder
+1. Clone the repository
+   ```shell
+   git clone https://github.com/stellar/js-xdr.git
+   cd js-xdr
+   ```
 
-```shell
-cd js-xdr
-npm install
-```
+2. Install pnpm (if not already installed)
+   ```shell
+   npm install -g pnpm
+   ```
 
-3. Install Node 6.14.0
+3. Install dependencies
+   ```shell
+   pnpm install
+   ```
 
-Because we support earlier versions of Node, please install and develop on Node
-6.14.0 so you don't get surprised when your code works locally but breaks in CI.
+4. Run tests
+   ```shell
+   pnpm test
+   ```
 
-Here's out to install `nvm` if you haven't: https://github.com/creationix/nvm
+**Development Tips:**
 
-```shell
-nvm install
+- Run `pnpm fmt` to format code with Prettier
+- Pre-commit hooks will automatically format staged files
+- Use `nvm` to manage Node versions: https://github.com/creationix/nvm
 
-# if you've never installed 6.14.0 before you'll want to re-install yarn
-npm install -g yarn
-```
+**Note:** While the built library supports multiple Node versions, development requires Node.js ≥ 20.0.0 and pnpm ≥ 9.0.
 
-If you work on several projects that use different Node versions, you might it
-helpful to install this automatic version manager:
-https://github.com/wbyoung/avn
-
-````
-
-4. Observe the project's code style
-
-While you're making changes, make sure to run the linter-watcher to catch any
-   linting errors (in addition to making sure your text editor supports ESLint)
-
-```shell
-node_modules/.bin/gulp watch
-````
-
-If you're working on a file not in `src`, limit your code to Node 6.16 ES! See
-what's supported here: https://node.green/ (The reason is that our npm library
-must support earlier versions of Node, so the tests need to run on those
-versions.)

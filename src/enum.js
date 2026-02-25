@@ -1,39 +1,50 @@
-import Map from 'core-js/library/es6/map';
-import each from 'lodash/each';
-import vals from 'lodash/values';
 import { Int } from './int';
-import includeIoMixin from './io-mixin';
+import { XdrPrimitiveType, isSerializableIsh } from './xdr-type';
+import { XdrReaderError, XdrWriterError } from './errors';
 
-export class Enum {
+export class Enum extends XdrPrimitiveType {
   constructor(name, value) {
+    super();
     this.name = name;
     this.value = value;
   }
 
-  static read(io) {
-    const intVal = Int.read(io);
+  /**
+   * @inheritDoc
+   */
+  static read(reader) {
+    const intVal = Int.read(reader);
+    const res = this._byValue[intVal];
+    if (res === undefined)
+      throw new XdrReaderError(
+        `unknown ${this.enumName} member for value ${intVal}`
+      );
+    return res;
+  }
 
-    if (!this._byValue.has(intVal)) {
-      throw new Error(
-        `XDR Read Error: Unknown ${this.enumName} member for value ${intVal}`
+  /**
+   * @inheritDoc
+   */
+  static write(value, writer) {
+    if (!this.isValid(value)) {
+      throw new XdrWriterError(
+        `${value} has enum name ${value?.enumName}, not ${
+          this.enumName
+        }: ${JSON.stringify(value)}`
       );
     }
 
-    return this._byValue.get(intVal);
+    Int.write(value.value, writer);
   }
 
-  static write(value, io) {
-    if (!(value instanceof this)) {
-      throw new Error(
-        `XDR Write Error: Unknown ${value} is not a ${this.enumName}`
-      );
-    }
-
-    Int.write(value.value, io);
-  }
-
+  /**
+   * @inheritDoc
+   */
   static isValid(value) {
-    return value instanceof this;
+    return (
+      value?.constructor?.enumName === this.enumName ||
+      isSerializableIsh(value, this)
+    );
   }
 
   static members() {
@@ -41,28 +52,24 @@ export class Enum {
   }
 
   static values() {
-    return vals(this._members);
+    return Object.values(this._members);
   }
 
   static fromName(name) {
     const result = this._members[name];
 
-    if (!result) {
-      throw new Error(`${name} is not a member of ${this.enumName}`);
-    }
+    if (!result)
+      throw new TypeError(`${name} is not a member of ${this.enumName}`);
 
     return result;
   }
 
   static fromValue(value) {
-    const result = this._byValue.get(value);
-
-    if (!result) {
-      throw new Error(
+    const result = this._byValue[value];
+    if (result === undefined)
+      throw new TypeError(
         `${value} is not a value of any member of ${this.enumName}`
       );
-    }
-
     return result;
   }
 
@@ -73,17 +80,15 @@ export class Enum {
     context.results[name] = ChildEnum;
 
     ChildEnum._members = {};
-    ChildEnum._byValue = new Map();
+    ChildEnum._byValue = {};
 
-    each(members, (value, key) => {
+    for (const [key, value] of Object.entries(members)) {
       const inst = new ChildEnum(key, value);
       ChildEnum._members[key] = inst;
-      ChildEnum._byValue.set(value, inst);
+      ChildEnum._byValue[value] = inst;
       ChildEnum[key] = () => inst;
-    });
+    }
 
     return ChildEnum;
   }
 }
-
-includeIoMixin(Enum);

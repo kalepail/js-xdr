@@ -1,44 +1,64 @@
-import every from 'lodash/every';
-import each from 'lodash/each';
-import times from 'lodash/times';
-import isArray from 'lodash/isArray';
-import includeIoMixin from './io-mixin';
+import { NestedXdrType } from './xdr-type';
+import { XdrWriterError, XdrReaderError } from './errors';
 
-export class Array {
-  constructor(childType, length) {
+export class Array extends NestedXdrType {
+  constructor(childType, length, maxDepth = NestedXdrType.DEFAULT_MAX_DEPTH) {
+    super(maxDepth);
     this._childType = childType;
     this._length = length;
   }
 
-  read(io) {
-    return times(this._length, () => this._childType.read(io));
-  }
-
-  write(value, io) {
-    if (!isArray(value)) {
-      throw new Error(`XDR Write Error: value is not array`);
-    }
-
-    if (value.length !== this._length) {
-      throw new Error(
-        `XDR Write Error: Got array of size ${value.length},` +
-          `expected ${this._length}`
+  /**
+   * @inheritDoc
+   */
+  read(reader, remainingDepth = this._maxDepth) {
+    // Upper-bound fast-fail: remaining bytes is a loose capacity check since
+    // each XDR element typically consumes more than 1 byte (e.g., 4+ bytes).
+    if (this._length > reader.remainingBytes()) {
+      throw new XdrReaderError(
+        `Array length ${
+          this._length
+        } exceeds remaining ${reader.remainingBytes()} bytes`
       );
     }
-
-    each(value, (child) => this._childType.write(child, io));
+    NestedXdrType.checkDepth(remainingDepth);
+    // allocate array of specified length
+    const result = new global.Array(this._length);
+    // read values
+    for (let i = 0; i < this._length; i++) {
+      result[i] = this._childType.read(reader, remainingDepth - 1);
+    }
+    return result;
   }
 
-  isValid(value) {
-    if (!isArray(value)) {
-      return false;
+  /**
+   * @inheritDoc
+   */
+  write(value, writer) {
+    if (!global.Array.isArray(value))
+      throw new XdrWriterError(`value is not array`);
+
+    if (value.length !== this._length)
+      throw new XdrWriterError(
+        `got array of size ${value.length}, expected ${this._length}`
+      );
+
+    for (const child of value) {
+      this._childType.write(child, writer);
     }
-    if (value.length !== this._length) {
+  }
+
+  /**
+   * @inheritDoc
+   */
+  isValid(value) {
+    if (!(value instanceof global.Array) || value.length !== this._length) {
       return false;
     }
 
-    return every(value, (child) => this._childType.isValid(child));
+    for (const child of value) {
+      if (!this._childType.isValid(child)) return false;
+    }
+    return true;
   }
 }
-
-includeIoMixin(Array.prototype);

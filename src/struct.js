@@ -1,72 +1,91 @@
-import each from 'lodash/each';
-import map from 'lodash/map';
-import isUndefined from 'lodash/isUndefined';
-import fromPairs from 'lodash/fromPairs';
 import { Reference } from './reference';
-import includeIoMixin from './io-mixin';
+import { NestedXdrType, isSerializableIsh } from './xdr-type';
+import { XdrWriterError } from './errors';
 
-export class Struct {
-  constructor(attributes) {
+export class Struct extends NestedXdrType {
+  constructor(attributes, maxDepth) {
+    const resolvedMaxDepth = maxDepth ?? new.target?._maxDepth;
+    super(resolvedMaxDepth);
     this._attributes = attributes || {};
   }
 
-  static read(io) {
-    const fields = map(this._fields, (field) => {
-      const [name, type] = field;
-      const value = type.read(io);
-      return [name, value];
-    });
+  /**
+   * @inheritDoc
+   */
+  static read(reader, remainingDepth = this._maxDepth) {
+    NestedXdrType.checkDepth(remainingDepth);
 
-    return new this(fromPairs(fields));
-  }
-
-  static write(value, io) {
-    if (!(value instanceof this)) {
-      throw new Error(`XDR Write Error: ${value} is not a ${this.structName}`);
+    const attributes = {};
+    for (const [fieldName, type] of this._fields) {
+      attributes[fieldName] = type.read(reader, remainingDepth - 1);
     }
-    each(this._fields, (field) => {
-      const [name, type] = field;
-      const attribute = value._attributes[name];
-      type.write(attribute, io);
-    });
+    return new this(attributes, this._maxDepth);
   }
 
+  /**
+   * @inheritDoc
+   */
+  static write(value, writer) {
+    if (!this.isValid(value)) {
+      throw new XdrWriterError(
+        `${value} has struct name ${value?.constructor?.structName}, not ${
+          this.structName
+        }: ${JSON.stringify(value)}`
+      );
+    }
+
+    for (const [fieldName, type] of this._fields) {
+      const attribute = value._attributes[fieldName];
+      type.write(attribute, writer);
+    }
+  }
+
+  /**
+   * @inheritDoc
+   */
   static isValid(value) {
-    return value instanceof this;
+    return (
+      value?.constructor?.structName === this.structName ||
+      isSerializableIsh(value, this)
+    );
   }
 
-  static create(context, name, fields) {
+  static create(
+    context,
+    name,
+    fields,
+    maxDepth = NestedXdrType.DEFAULT_MAX_DEPTH
+  ) {
     const ChildStruct = class extends Struct {};
 
     ChildStruct.structName = name;
-
+    ChildStruct._maxDepth = maxDepth;
     context.results[name] = ChildStruct;
 
-    ChildStruct._fields = fields.map(([fieldName, field]) => {
+    const mappedFields = new Array(fields.length);
+    for (let i = 0; i < fields.length; i++) {
+      const fieldDescriptor = fields[i];
+      const fieldName = fieldDescriptor[0];
+      let field = fieldDescriptor[1];
       if (field instanceof Reference) {
         field = field.resolve(context);
       }
+      mappedFields[i] = [fieldName, field];
+      // create accessors
+      ChildStruct.prototype[fieldName] = createAccessorMethod(fieldName);
+    }
 
-      return [fieldName, field];
-    });
-
-    each(ChildStruct._fields, (field) => {
-      const [fieldName] = field;
-      ChildStruct.prototype[fieldName] = getReadOrWriteAttribute(fieldName);
-    });
+    ChildStruct._fields = mappedFields;
 
     return ChildStruct;
   }
 }
 
-includeIoMixin(Struct);
-
-function getReadOrWriteAttribute(name) {
+function createAccessorMethod(name) {
   return function readOrWriteAttribute(value) {
-    if (!isUndefined(value)) {
+    if (value !== undefined) {
       this._attributes[name] = value;
     }
-
     return this._attributes[name];
   };
 }

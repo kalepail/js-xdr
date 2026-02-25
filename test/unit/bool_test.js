@@ -1,9 +1,9 @@
+import { XdrWriter } from '../../src/serialization/xdr-writer';
+import { XdrReader } from '../../src/serialization/xdr-reader';
 let Bool = XDR.Bool;
-import { Cursor } from '../../src/cursor';
-import { cursorToArray } from '../support/io-helpers';
 
-describe('Bool.read', function() {
-  it('decodes correctly', function() {
+describe('Bool.read', function () {
+  it('decodes correctly', function () {
     expect(read([0, 0, 0, 0])).to.eql(false);
     expect(read([0, 0, 0, 1])).to.eql(true);
 
@@ -12,31 +12,31 @@ describe('Bool.read', function() {
   });
 
   function read(bytes) {
-    let io = new Cursor(bytes);
+    let io = new XdrReader(bytes);
     return Bool.read(io);
   }
 });
 
-describe('Bool.write', function() {
-  it('encodes correctly', function() {
+describe('Bool.write', function () {
+  it('encodes correctly', function () {
     expect(write(false)).to.eql([0, 0, 0, 0]);
     expect(write(true)).to.eql([0, 0, 0, 1]);
   });
 
   function write(value) {
-    let io = new Cursor(8);
+    let io = new XdrWriter(8);
     Bool.write(value, io);
-    return cursorToArray(io);
+    return io.toArray();
   }
 });
 
-describe('Bool.isValid', function() {
-  it('returns true for booleans', function() {
+describe('Bool.isValid', function () {
+  it('returns true for booleans', function () {
     expect(Bool.isValid(true)).to.be.true;
     expect(Bool.isValid(false)).to.be.true;
   });
 
-  it('returns false for non booleans', function() {
+  it('returns false for non booleans', function () {
     expect(Bool.isValid(0)).to.be.false;
     expect(Bool.isValid('0')).to.be.false;
     expect(Bool.isValid([true])).to.be.false;

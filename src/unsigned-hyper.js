@@ -1,52 +1,38 @@
-import Long from 'long';
-import includeIoMixin from './io-mixin';
+import { LargeInt } from './large-int';
 
-export class UnsignedHyper extends Long {
-  static read(io) {
-    const high = io.readInt32BE();
-    const low = io.readInt32BE();
-    return this.fromBits(low, high);
+export class UnsignedHyper extends LargeInt {
+  /**
+   * @param {Array<Number|BigInt|String>} parts - Slices to encode
+   */
+  constructor(...args) {
+    super(args);
   }
 
-  static write(value, io) {
-    if (!(value instanceof this)) {
-      throw new Error(`XDR Write Error: ${value} is not an UnsignedHyper`);
-    }
-
-    io.writeInt32BE(value.high);
-    io.writeInt32BE(value.low);
+  get low() {
+    return Number(this._value & 0xffffffffn) << 0;
   }
 
-  static fromString(string) {
-    if (!/^\d+$/.test(string)) {
-      throw new Error(`Invalid hyper string: ${string}`);
-    }
-    const result = super.fromString(string, true);
-    return new this(result.low, result.high);
+  get high() {
+    return Number(this._value >> 32n) >> 0;
   }
 
+  get size() {
+    return 64;
+  }
+
+  get unsigned() {
+    return true;
+  }
+
+  /**
+   * Create UnsignedHyper instance from two [high][low] i32 values
+   * @param {Number} low - Low part of u64 number
+   * @param {Number} high - High part of u64 number
+   * @return {UnsignedHyper}
+   */
   static fromBits(low, high) {
-    const result = super.fromBits(low, high, true);
-    return new this(result.low, result.high);
-  }
-
-  static isValid(value) {
-    return value instanceof this;
-  }
-
-  constructor(low, high) {
-    super(low, high, true);
+    return new this(low, high);
   }
 }
 
-includeIoMixin(UnsignedHyper);
-
-UnsignedHyper.MAX_VALUE = new UnsignedHyper(
-  Long.MAX_UNSIGNED_VALUE.low,
-  Long.MAX_UNSIGNED_VALUE.high
-);
-
-UnsignedHyper.MIN_VALUE = new UnsignedHyper(
-  Long.MIN_VALUE.low,
-  Long.MIN_VALUE.high
-);
+UnsignedHyper.defineIntBoundaries();

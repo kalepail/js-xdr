@@ -1,7 +1,11 @@
 module.exports = {
   env: {
-    es6: true
+    es6: true,
+    es2017: true,
+    es2020: true,
+    es2022: true
   },
+  parserOptions: { ecmaVersion: 13 },
   extends: ['airbnb-base', 'prettier'],
   plugins: ['prettier', 'prefer-import'],
   rules: {
@@ -18,6 +22,8 @@ module.exports = {
     'no-use-before-define': 0,
     'prefer-destructuring': 0,
     'lines-between-class-members': 0,
+    'no-plusplus': 0, // allow ++ for iterators
+    'no-bitwise': 0, // allow high-performant bitwise operations
 
     // WARN
     'prefer-import/prefer-import-over-require': [1],
@@ -34,6 +40,7 @@ module.exports = {
     'prefer-const': 1,
     'object-shorthand': 1,
     'require-await': 1,
+    'max-classes-per-file': ['warn', 3], // do not block imports from other classes
 
     // ERROR
     'no-unused-expressions': [2, { allowTaggedTemplates: true }],
@@ -86,7 +93,25 @@ module.exports = {
         property: '__defineSetter__',
         message: 'Please use Object.defineProperty instead.'
       }
+    ],
+    'no-restricted-syntax': [
+      // override basic rule to allow ForOfStatement
+      'error',
+      {
+        selector: 'ForInStatement',
+        message:
+          'for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array.'
+      },
+      {
+        selector: 'LabeledStatement',
+        message:
+          'Labels are a form of GOTO; using them makes code confusing and hard to maintain and understand.'
+      },
+      {
+        selector: 'WithStatement',
+        message:
+          '`with` is disallowed in strict mode because it makes code impossible to predict and optimize.'
+      }
     ]
-  },
-  parser: 'babel-eslint'
+  }
 };

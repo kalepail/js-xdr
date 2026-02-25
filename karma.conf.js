@@ -1,8 +1,18 @@
-module.exports = function(config) {
+const webpack = require('webpack');
+
+module.exports = function (config) {
   config.set({
-    frameworks: ['mocha', 'sinon-chai'],
-    browsers: ['Firefox'],
+    frameworks: ['mocha', 'webpack', 'sinon-chai'],
+    browsers: ['FirefoxHeadless', 'ChromeHeadless'],
     browserNoActivityTimeout: 20000,
+
+    plugins: [
+      'karma-mocha',
+      'karma-webpack',
+      'karma-sinon-chai',
+      'karma-chrome-launcher',
+      'karma-firefox-launcher'
+    ],
 
     files: ['dist/xdr.js', 'test/unit/**/*.js'],
 
@@ -11,11 +21,17 @@ module.exports = function(config) {
     },
 
     webpack: {
+      mode: 'development',
       module: {
-        loaders: [
+        rules: [
           { test: /\.js$/, exclude: /node_modules/, loader: 'babel-loader' }
         ]
-      }
+      },
+      plugins: [
+        new webpack.ProvidePlugin({
+          Buffer: ['buffer', 'Buffer']
+        })
+      ]
     },
 
     webpackMiddleware: {

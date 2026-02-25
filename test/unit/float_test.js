@@ -1,9 +1,9 @@
 let Float = XDR.Float;
-import { Cursor } from '../../src/cursor';
-import { cursorToArray } from '../support/io-helpers';
+import { XdrReader } from '../../src/serialization/xdr-reader';
+import { XdrWriter } from '../../src/serialization/xdr-writer';
 
-describe('Float.read', function() {
-  it('decodes correctly', function() {
+describe('Float.read', function () {
+  it('decodes correctly', function () {
     expect(read([0x00, 0x00, 0x00, 0x00])).to.eql(0.0);
     expect(read([0x80, 0x00, 0x00, 0x00])).to.eql(-0.0);
     expect(read([0x3f, 0x80, 0x00, 0x00])).to.eql(1.0);
@@ -13,13 +13,13 @@ describe('Float.read', function() {
   });
 
   function read(bytes) {
-    let io = new Cursor(bytes);
+    let io = new XdrReader(bytes);
     return Float.read(io);
   }
 });
 
-describe('Float.write', function() {
-  it('encodes correctly', function() {
+describe('Float.write', function () {
+  it('encodes correctly', function () {
     expect(write(0.0)).to.eql([0x00, 0x00, 0x00, 0x00]);
     expect(write(-0.0)).to.eql([0x80, 0x00, 0x00, 0x00]);
     expect(write(1.0)).to.eql([0x3f, 0x80, 0x00, 0x00]);
@@ -27,14 +27,14 @@ describe('Float.write', function() {
   });
 
   function write(value) {
-    let io = new Cursor(8);
+    let io = new XdrWriter(8);
     Float.write(value, io);
-    return cursorToArray(io);
+    return io.toArray();
   }
 });
 
-describe('Float.isValid', function() {
-  it('returns true for numbers', function() {
+describe('Float.isValid', function () {
+  it('returns true for numbers', function () {
     expect(Float.isValid(0)).to.be.true;
     expect(Float.isValid(-1)).to.be.true;
     expect(Float.isValid(1.0)).to.be.true;
@@ -44,7 +44,7 @@ describe('Float.isValid', function() {
     expect(Float.isValid(-Infinity)).to.be.true;
   });
 
-  it('returns false for non numbers', function() {
+  it('returns false for non numbers', function () {
     expect(Float.isValid(true)).to.be.false;
     expect(Float.isValid(false)).to.be.false;
     expect(Float.isValid(null)).to.be.false;

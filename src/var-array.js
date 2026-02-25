@@ -1,56 +1,72 @@
-import every from 'lodash/every';
-import each from 'lodash/each';
-import times from 'lodash/times';
-import isArray from 'lodash/isArray';
 import { UnsignedInt } from './unsigned-int';
-import { Int } from './int';
-import includeIoMixin from './io-mixin';
+import { NestedXdrType } from './xdr-type';
+import { XdrReaderError, XdrWriterError } from './errors';
 
-export class VarArray {
-  constructor(childType, maxLength = UnsignedInt.MAX_VALUE) {
+export class VarArray extends NestedXdrType {
+  constructor(
+    childType,
+    maxLength = UnsignedInt.MAX_VALUE,
+    maxDepth = NestedXdrType.DEFAULT_MAX_DEPTH
+  ) {
+    super(maxDepth);
     this._childType = childType;
     this._maxLength = maxLength;
   }
 
-  read(io) {
-    const length = Int.read(io);
+  /**
+   * @inheritDoc
+   */
+  read(reader, remainingDepth = this._maxDepth) {
+    NestedXdrType.checkDepth(remainingDepth);
+    const length = UnsignedInt.read(reader);
+    if (length > this._maxLength)
+      throw new XdrReaderError(
+        `saw ${length} length VarArray, max allowed is ${this._maxLength}`
+      );
 
-    if (length > this._maxLength) {
-      throw new Error(
-        `XDR Read Error: Saw ${length} length VarArray,` +
-          `max allowed is ${this._maxLength}`
+    // Upper-bound fast-fail: remaining bytes is a loose capacity check since
+    // each XDR element typically consumes more than 1 byte (e.g., 4+ bytes)
+    if (length > reader.remainingBytes()) {
+      throw new XdrReaderError(
+        `VarArray length ${length} exceeds remaining ${reader.remainingBytes()} bytes`
       );
     }
 
-    return times(length, () => this._childType.read(io));
+    const result = new Array(length);
+    for (let i = 0; i < length; i++) {
+      result[i] = this._childType.read(reader, remainingDepth - 1);
+    }
+    return result;
   }
 
-  write(value, io) {
-    if (!isArray(value)) {
-      throw new Error(`XDR Write Error: value is not array`);
-    }
+  /**
+   * @inheritDoc
+   */
+  write(value, writer) {
+    if (!(value instanceof Array))
+      throw new XdrWriterError(`value is not array`);
 
-    if (value.length > this._maxLength) {
-      throw new Error(
-        `XDR Write Error: Got array of size ${value.length},` +
-          `max allowed is ${this._maxLength}`
+    if (value.length > this._maxLength)
+      throw new XdrWriterError(
+        `got array of size ${value.length}, max allowed is ${this._maxLength}`
       );
-    }
 
-    Int.write(value.length, io);
-    each(value, (child) => this._childType.write(child, io));
+    UnsignedInt.write(value.length, writer);
+    for (const child of value) {
+      this._childType.write(child, writer);
+    }
   }
 
+  /**
+   * @inheritDoc
+   */
   isValid(value) {
-    if (!isArray(value)) {
+    if (!(value instanceof Array) || value.length > this._maxLength) {
       return false;
     }
-    if (value.length > this._maxLength) {
-      return false;
+    for (const child of value) {
+      if (!this._childType.isValid(child)) return false;
     }
-
-    return every(value, (child) => this._childType.isValid(child));
+    return true;
   }
 }
-
-includeIoMixin(VarArray.prototype);
